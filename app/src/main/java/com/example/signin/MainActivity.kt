@@ -1,75 +1,50 @@
 package com.example.signin
 
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.registerForActivityResult
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key.Companion.D
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.signin.ui.theme.SignInTheme
-import com.firebase.ui.auth.AuthUI
 import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract
 import com.firebase.ui.auth.data.model.FirebaseAuthUIAuthenticationResult
-import com.google.android.gms.auth.api.identity.BeginSignInRequest
-import com.google.android.gms.auth.api.identity.Identity
-import com.google.android.gms.auth.api.identity.SignInClient
-import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserInfo
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import kotlin.math.sign
 
 class MainActivity : ComponentActivity() {
 
-    private val signInLauncher = registerForActivityResult(
-        FirebaseAuthUIActivityResultContract()
-    ) { res ->
-        this.onSignInResult(res)
-    }
-
-    private fun onSignInResult(result: FirebaseAuthUIAuthenticationResult) {
-        val response = result.idpResponse
-        if (result.resultCode == ComponentActivity.RESULT_OK) {
-            // Successfully signed in
-            val user = FirebaseAuth.getInstance().currentUser
-            Log.d("Success", user.displayName)
-        } else {
-            Log.d("Failed", "no message")
-        }
-    }
+    private lateinit var navController: NavHostController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             SignInTheme {
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
                 ) {
-                    LoginScreen()
+                    navController = rememberNavController()
+                    NavGraph(navController = navController)
                 }
             }
         }
@@ -79,12 +54,13 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun LoginScreen(
-    signInViewModel: SignInViewModel = viewModel()
+    signInViewModel: SignInViewModel = viewModel(),
+    navigateToProfileScreen: () -> Unit
 ) {
 
     val signInLancher = rememberLauncherForActivityResult(
         contract = signInViewModel.firebaseAuthUiContract,
-        onResult = { res -> signInViewModel.onSignInResult(res) }
+        onResult = { res -> signInViewModel.onSignInResult(res, navigateToProfileScreen) }
     )
 
     Column(
@@ -92,19 +68,56 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Create a scope that is automatically cancelled
-        // if the user closes your app while async work is
-        // happening
-        val scope = rememberCoroutineScope()
         Button(
             onClick = {
-                scope.launch {
-                    signInViewModel.onSignInAttempt(signInLancher)
-                }
+                signInViewModel.onSignInAttempt(signInLancher)
             }
         ){
             Text("Sign Up")
         }
+    }
+}
+
+@Composable
+fun ProfileScreen(
+    signInViewModel: SignInViewModel
+){
+
+    val user by signInViewModel.user.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ){
+        AsyncImage(
+            modifier = Modifier
+                .clip(CircleShape)
+                .size(120.dp),
+            model = ImageRequest.Builder(context = LocalContext.current)
+                .data(user.photoUrl)
+                .crossfade(true)
+                .build(),
+            contentDescription = "Profile Picture",
+            contentScale = ContentScale.FillBounds,
+        )
+        UserInfo(qInfo = "Name", aInfo = user.name)
+        UserInfo(qInfo = "Email", aInfo = user.email)
+        UserInfo(qInfo = "Phone Number", aInfo = user.phoneNumber)
+    }
+}
+
+@Composable
+fun UserInfo(qInfo: String, aInfo: String){
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ){
+        Text(qInfo)
+        Text(aInfo)
+        Log.d("aInfo","${aInfo}")
     }
 }
 
@@ -115,5 +128,6 @@ fun LoginScreen(
 @Composable
 fun AuthScreenTest(){
     SignInTheme {
+        ProfileScreen(signInViewModel = SignInViewModel())
     }
 }
