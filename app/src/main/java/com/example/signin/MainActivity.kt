@@ -14,8 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -23,28 +21,49 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.signin.data.model.GoogleUser
 import com.example.signin.ui.theme.SignInTheme
-import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract
-import com.firebase.ui.auth.data.model.FirebaseAuthUIAuthenticationResult
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.UserInfo
-import kotlinx.coroutines.launch
-import kotlin.math.sign
+import com.google.android.gms.auth.api.Auth
+import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var navController: NavHostController
 
+
+    val signInViewModel = SignInViewModel()
+    private var isLoggedIn: Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val context = applicationContext
+
         setContent {
+            runBlocking {
+                val datastore = LoggerDatastore(context)
+                this@MainActivity.apply{
+                    datastore.getLog.collect{
+                        signInViewModel.changeLog()
+                    }
+
+                    if(signInViewModel.checkLoggerBool()){
+                        signInViewModel.setRoute()
+                        Log.d("runblocking", signInViewModel.route.value)
+                    }
+                }
+            }
+
             SignInTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
                 ) {
+                    val datastore = LoggerDatastore(context)
                     navController = rememberNavController()
-                    NavGraph(navController = navController)
+                    NavGraph(navController = navController, datastore = datastore, signInViewModel = signInViewModel)
                 }
             }
         }
@@ -55,12 +74,18 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun LoginScreen(
     signInViewModel: SignInViewModel = viewModel(),
+    datastore: LoggerDatastore,
     navigateToProfileScreen: () -> Unit
 ) {
+    Log.d("Login", signInViewModel.name.collectAsState().value)
 
-    val signInLancher = rememberLauncherForActivityResult(
+    val signInLauncher = rememberLauncherForActivityResult(
         contract = signInViewModel.firebaseAuthUiContract,
-        onResult = { res -> signInViewModel.onSignInResult(res, navigateToProfileScreen) }
+        onResult = { res -> signInViewModel.onSignInResult(
+            res,
+            navigateToProfileScreen,
+            datastore
+        ) }
     )
 
     Column(
@@ -70,7 +95,7 @@ fun LoginScreen(
     ) {
         Button(
             onClick = {
-                signInViewModel.onSignInAttempt(signInLancher)
+                signInViewModel.onSignInAttempt(signInLauncher)
             }
         ){
             Text("Sign Up")
@@ -82,8 +107,11 @@ fun LoginScreen(
 fun ProfileScreen(
     signInViewModel: SignInViewModel
 ){
+    val name = signInViewModel.name.collectAsState()
+    val email = signInViewModel.email.collectAsState()
+    val phone = signInViewModel.phone.collectAsState()
+    val photoUrl = signInViewModel.photoUrl.collectAsState()
 
-    val user by signInViewModel.user.collectAsState()
 
     Column(
         modifier = Modifier
@@ -95,15 +123,15 @@ fun ProfileScreen(
                 .clip(CircleShape)
                 .size(120.dp),
             model = ImageRequest.Builder(context = LocalContext.current)
-                .data(user.photoUrl)
+                .data(photoUrl.value)
                 .crossfade(true)
                 .build(),
             contentDescription = "Profile Picture",
             contentScale = ContentScale.FillBounds,
         )
-        UserInfo(qInfo = "Name", aInfo = user.name)
-        UserInfo(qInfo = "Email", aInfo = user.email)
-        UserInfo(qInfo = "Phone Number", aInfo = user.phoneNumber)
+        UserInfo(qInfo = "Name", aInfo = name.value)
+        UserInfo(qInfo = "Email", aInfo = email.value)
+        UserInfo(qInfo = "Phone Number", aInfo = phone.value)
     }
 }
 
@@ -117,7 +145,7 @@ fun UserInfo(qInfo: String, aInfo: String){
     ){
         Text(qInfo)
         Text(aInfo)
-        Log.d("aInfo","${aInfo}")
+        Log.d("aInfo", aInfo)
     }
 }
 
@@ -128,6 +156,5 @@ fun UserInfo(qInfo: String, aInfo: String){
 @Composable
 fun AuthScreenTest(){
     SignInTheme {
-        ProfileScreen(signInViewModel = SignInViewModel())
     }
 }

@@ -1,6 +1,9 @@
 package com.example.signin
 
+import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.datastore.dataStore
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -9,14 +12,22 @@ import androidx.navigation.compose.composable
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    signInViewModel: SignInViewModel = viewModel()
+    datastore: LoggerDatastore,
+    signInViewModel: SignInViewModel
 ){
-    NavHost(navController = navController, startDestination = "login" ){
+
+    Log.d("Navigation", signInViewModel.route.collectAsState().value)
+    NavHost(
+        navController = navController,
+        startDestination = signInViewModel.route.collectAsState().value
+    ){
+
         composable(
             route = "login"
         ){
             LoginScreen(
                 signInViewModel = signInViewModel,
+                datastore = datastore,
                 navigateToProfileScreen = {
                     navController.navigate(
                         route = "profile",
